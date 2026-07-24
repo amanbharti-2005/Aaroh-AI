@@ -1,14 +1,3 @@
-"""
-app/core/rag/generate.py
-
-This is the piece that turns retrieved chunks into an actual AI-written
-answer. It's the missing link between "raw paragraphs from ChromaDB"
-and "Aaroh AI Mentor gives you a real response".
-
-Flow: question -> retrieve_engineering_knowledge() -> this file builds
-a prompt with those chunks -> Gemini generates the final answer.
-"""
-
 import os
 from groq import Groq
 
