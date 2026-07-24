@@ -4,7 +4,7 @@ from sqlalchemy import text
 from app.core.database import engine, Base
 from app.core.security import get_current_user
 from app.models import user, project, repo, report, roadmap, chat_message
-from app.routers import architecture, analytics, project_analysis, roadmap_generate
+from app.routers import architecture, analytics, project_analysis
 #from app.routers import pdf_report
 from app.routers import repo_intel_analysis
 
@@ -56,7 +56,6 @@ app.include_router(report_generate.router)
 app.include_router(architecture.router)
 app.include_router(analytics.router)
 app.include_router(project_analysis.router)
-app.include_router(roadmap_generate.router)
 #app.include_router(pdf_report.router)
 app.include_router(repo_intel_analysis.router)
 
