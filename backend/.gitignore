@@ -1,0 +1,11 @@
+.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+
+app/core/rag/chroma_db/
+app/core/rag/parent_docs/
+
+.env
+firebase-credentials.json
