@@ -4,10 +4,11 @@ import {
   MessageSquare, FileText, Shield, ChevronRight,
   Star, Code2, Rocket, BookOpen
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import PublicLayout from '../../layouts/PublicLayout';
 
 const features: {
-  icon: React.FC<any>;
+  icon: LucideIcon;
   title: string;
   description: string;
   color: string;

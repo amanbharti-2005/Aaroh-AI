@@ -21,18 +21,29 @@ from app.models.report import Report
 router = APIRouter(prefix="/api/reports", tags=["report-generation"])
  
  
-@router.post("/generate")
-def generate_report(
+@router.post("/generate/{project_id}")
+def generate_report_for_project(
     project_id: int,
-    repo_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    """
+    Generates the Project Health scores and saves them.
+
+    repo_id is derived from project_id rather than passed in: repo_ingest.py
+    indexes each repo under str(project_id), so they're always the same value.
+    """
+    repo_id = str(project_id)
+
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
- 
-    result = generate_project_report(repo_id)
+
+    try:
+        result = generate_project_report(repo_id)
+    except RuntimeError as e:
+        # Missing GROQ_API_KEY — surface as "unavailable", not a 500.
+        raise HTTPException(status_code=503, detail=str(e))
  
     # Report model has all 7 score columns — save every one of them.
     # (Previously only 4 were persisted here; code_quality_score,

@@ -16,8 +16,12 @@ answer questions about someone's own uploaded code.
 import os
 import requests
 
-TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
 TAVILY_URL = "https://api.tavily.com/search"
+
+
+def _tavily_api_key() -> str:
+    """Read at call time — see the same note in generate.py._groq_api_key()."""
+    return os.environ.get("TAVILY_API_KEY", "")
 
 
 def search_web(query: str, max_results: int = 4) -> list[dict]:
@@ -26,7 +30,8 @@ def search_web(query: str, max_results: int = 4) -> list[dict]:
     Returns an empty list (never raises) if the API key is missing or
     the request fails — caller should treat that the same as "no results".
     """
-    if not TAVILY_API_KEY:
+    api_key = _tavily_api_key()
+    if not api_key:
         print("TAVILY_API_KEY not set — skipping web fallback.")
         return []
 
@@ -34,7 +39,7 @@ def search_web(query: str, max_results: int = 4) -> list[dict]:
         response = requests.post(
             TAVILY_URL,
             json={
-                "api_key": TAVILY_API_KEY,
+                "api_key": api_key,
                 "query": query,
                 "max_results": max_results,
                 "search_depth": "basic",

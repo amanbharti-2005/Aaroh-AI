@@ -1,12 +1,16 @@
+import os
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.core.database import engine, Base
 from app.core.security import get_current_user
-from app.models import user, project, repo, report, roadmap, chat_message
+# Imported for their side effect only: each module registers its table on
+# Base.metadata, which create_all() below needs in order to create them.
+from app.models import user, project, repo, report, roadmap, chat_message  # noqa: F401
 from app.routers import architecture, analytics, project_analysis
 #from app.routers import pdf_report
-from app.routers import repo_intel_analysis
+from app.routers import repo_intel_analysis, agents, roadmap_generate
 
 from app.routers import (
     project as project_router,
@@ -26,13 +30,25 @@ from app.routers import (
 
 app = FastAPI(title="Aaroh AI Backend")
 
+# Origins allowed to call this API from a browser. Local dev ports are always
+# allowed; the deployed frontend's URL is added via the FRONTEND_ORIGINS env
+# var (comma-separated) so it can change without a code edit. On Render set:
+#     FRONTEND_ORIGINS = https://your-app.vercel.app
+# "*" can't be combined with allow_credentials=True — browsers reject that
+# pairing for credentialed requests — so real origins must be listed.
+_default_origins = [
+    "http://localhost:5173",   # Vite's default dev port
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",   # Vite's fallback when 5173 is taken
+    "http://127.0.0.1:5174",
+]
+_extra_origins = [
+    o.strip() for o in os.environ.get("FRONTEND_ORIGINS", "").split(",") if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    # "*" can't legally be combined with allow_credentials=True — browsers
-    # reject that pairing for credentialed requests. List real origins
-    # instead. Add your deployed frontend URL here once you have one
-    # (e.g. "https://aaroh-ai.vercel.app").
-    allow_origins=["http://localhost:5174"],
+    allow_origins=_default_origins + _extra_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,6 +74,8 @@ app.include_router(analytics.router)
 app.include_router(project_analysis.router)
 #app.include_router(pdf_report.router)
 app.include_router(repo_intel_analysis.router)
+app.include_router(agents.router)
+app.include_router(roadmap_generate.router)
 
 
 @app.get("/")

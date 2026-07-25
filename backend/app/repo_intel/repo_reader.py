@@ -131,7 +131,7 @@ def _build_summary(source_type, source_id, metadata, tree, commits, readme_conte
 
 if __name__ == "__main__":
     # End-to-end test using the ZIP path (no external network needed).
-    import shutil, tempfile, os
+    import shutil, tempfile
 
     demo_src = tempfile.mkdtemp()
     os.makedirs(os.path.join(demo_src, "app"), exist_ok=True)

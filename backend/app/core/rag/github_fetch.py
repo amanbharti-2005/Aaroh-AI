@@ -15,6 +15,7 @@ only your own code.
 """
 
 import os
+import re
 import shutil
 import tempfile
 import zipfile
@@ -42,30 +43,114 @@ def _safe_extract(zip_ref: zipfile.ZipFile, extract_to: str) -> None:
     zip_ref.extractall(extract_to)
 
 
+def parse_owner_repo(repo_url: str) -> str:
+    """
+    Normalizes any of the forms people actually paste into "owner/repo":
+
+        https://github.com/owner/repo
+        https://github.com/owner/repo.git      <- the common copy-from-GitHub form
+        https://www.github.com/owner/repo/
+        http://github.com/owner/repo
+        git@github.com:owner/repo.git
+        github.com/owner/repo
+        https://github.com/owner/repo/tree/some-branch
+        owner/repo
+
+    The previous implementation only stripped the literal
+    "https://github.com/" prefix, so a URL ending in ".git" — exactly what
+    GitHub's own "Code -> HTTPS" button gives you — produced
+    "owner/repo.git" and every codeload request 404'd, surfacing as
+    "Check the URL is correct and the repo is public" for a repo that was
+    perfectly public.
+    """
+    url = repo_url.strip()
+
+    # SSH form: git@github.com:owner/repo.git
+    if url.startswith("git@"):
+        url = url.split(":", 1)[-1]
+    else:
+        url = re.sub(r"^https?://", "", url)
+        url = re.sub(r"^www\.", "", url)
+        url = re.sub(r"^github\.com/", "", url)
+
+    url = url.strip("/")
+
+    parts = [p for p in url.split("/") if p]
+    if len(parts) < 2:
+        raise ValueError(f"Couldn't parse owner/repo from: {repo_url}")
+
+    owner, repo = parts[0], parts[1]
+    # Drop a trailing ".git" and anything after owner/repo (e.g. /tree/main).
+    repo = re.sub(r"\.git$", "", repo)
+
+    if not owner or not repo:
+        raise ValueError(f"Couldn't parse owner/repo from: {repo_url}")
+
+    return f"{owner}/{repo}"
+
+
+def _default_branch(owner_repo: str) -> str | None:
+    """
+    Asks the GitHub API what the repo's default branch is, so repos whose
+    default is neither "main" nor "master" (e.g. "develop", "trunk") still
+    work instead of failing the hardcoded two-branch guess.
+    Returns None if the API call fails for any reason — the caller then
+    just reports the branches it tried.
+    """
+    try:
+        response = requests.get(
+            f"https://api.github.com/repos/{owner_repo}",
+            headers={"Accept": "application/vnd.github+json"},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return response.json().get("default_branch")
+    except requests.RequestException:
+        pass
+    return None
+
+
 def download_github_repo(repo_url: str, branch: str = None) -> str:
     """
-    repo_url: e.g. "https://github.com/owner/repo"
-    branch: e.g. "main" — if None, tries "main" then falls back to "master"
+    repo_url: e.g. "https://github.com/owner/repo" (with or without ".git")
+    branch: e.g. "main" — if None, tries "main", then "master", then the
+            repo's actual default branch via the GitHub API.
 
     Returns the local folder path where the repo was extracted.
     Caller is responsible for cleaning it up when done (see cleanup_repo below).
     """
-    owner_repo = repo_url.rstrip("/").replace("https://github.com/", "")
-    if "/" not in owner_repo:
-        raise ValueError(f"Couldn't parse owner/repo from: {repo_url}")
+    owner_repo = parse_owner_repo(repo_url)
 
     branches_to_try = [branch] if branch else ["main", "master"]
 
+    response = None
     for b in branches_to_try:
         zip_url = f"https://codeload.github.com/{owner_repo}/zip/refs/heads/{b}"
         response = requests.get(zip_url, timeout=30)
         if response.status_code == 200:
             break
     else:
-        raise RuntimeError(
-            f"Couldn't download {repo_url} — tried branches {branches_to_try}. "
-            "Check the URL is correct and the repo is public."
-        )
+        # Neither guess hit — ask GitHub for the real default branch before
+        # giving up, and use its answer to tell the user what actually went
+        # wrong (missing/private repo vs. an unusual branch name).
+        resolved = None if branch else _default_branch(owner_repo)
+        if resolved and resolved not in branches_to_try:
+            zip_url = f"https://codeload.github.com/{owner_repo}/zip/refs/heads/{resolved}"
+            response = requests.get(zip_url, timeout=30)
+
+        if response is None or response.status_code != 200:
+            if _default_branch(owner_repo) is None:
+                raise RuntimeError(
+                    f"Couldn't find the repository '{owner_repo}' on GitHub. "
+                    "Check the URL is spelled correctly and the repo is public "
+                    "— private repos aren't supported yet."
+                )
+            raise RuntimeError(
+                f"Found '{owner_repo}' but couldn't download any of its "
+                f"branches (tried {branches_to_try}"
+                + (f" and '{resolved}'" if resolved else "")
+                + "). The repository may be empty."
+            )
 
     temp_dir = tempfile.mkdtemp(prefix="aaroh_repo_")
     zip_path = os.path.join(temp_dir, "repo.zip")

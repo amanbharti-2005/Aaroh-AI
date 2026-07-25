@@ -178,3 +178,46 @@ async def ingest_zip(
     _upsert_repo_row(db, project_id_int, source_type="zip", source_url=None, intel=intel)
 
     return {"status": "success", "project_id": project_id}
+
+
+@router.get("/{project_id}/repo-intel")
+def get_repo_intel(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Reads back the Repository Intelligence analysis computed during ingestion.
+    The Dashboard and PDF Report pages both call this
+    (ENDPOINTS.repoIntel.get). Analysis is NOT re-run here — ingest already
+    stored it on the Repo row.
+
+    A 404 is the expected, non-error answer for idea-only (text/voice)
+    projects; both callers treat it as "no repo intelligence yet".
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    repo_row = db.query(Repo).filter(Repo.project_id == project_id).first()
+    if not repo_row:
+        raise HTTPException(
+            status_code=404,
+            detail="No repository has been ingested for this project yet.",
+        )
+
+    analysis = None
+    if repo_row.full_analysis:
+        try:
+            analysis = json.loads(repo_row.full_analysis)
+        except json.JSONDecodeError:
+            analysis = None
+
+    return {
+        "source_type": repo_row.source_type,
+        "source_url": repo_row.source_url,
+        "detected_languages": repo_row.detected_languages,
+        "detected_frameworks": repo_row.detected_frameworks,
+        "architecture_pattern": repo_row.architecture_pattern,
+        "analysis": analysis,
+    }

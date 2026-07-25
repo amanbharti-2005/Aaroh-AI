@@ -48,12 +48,13 @@ def analyze_project(
     )
 
     # Save the roadmap milestones
-    for m in result.get("milestones") or []:
+    for i, m in enumerate(result.get("milestones") or [], start=1):
         db.add(Roadmap(
             project_id=request.project_id,
             milestone_title=m["title"],
             milestone_description=m.get("description"),
-            order_index=m["order"],
+            # Fall back to positional order — the LLM occasionally omits "order".
+            order_index=m.get("order", i),
         ))
 
     # Save a report row with the AI's reasoning as commentary

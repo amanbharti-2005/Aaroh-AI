@@ -38,6 +38,10 @@ export const ENDPOINTS = {
   health: {
     report: (projectId: string) => `${API_BASE_URL}/health/${projectId}`,
     history: (projectId: string) => `${API_BASE_URL}/health/${projectId}/history`,
+    // Runs the analysis that produces the scores. Nothing referenced this
+    // before, so /health/{id} always returned [] and Project Health was
+    // permanently stuck on "No health report has been generated yet".
+    generate: (projectId: string) => `${API_BASE_URL}/api/reports/generate/${projectId}`,
   },
   // Roadmap
   roadmap: {

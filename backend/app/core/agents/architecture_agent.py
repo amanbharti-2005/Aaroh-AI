@@ -9,10 +9,7 @@ No new vector store, no GraphRAG — one structured-JSON LLM call over
 context we already retrieve, same pattern as report_generator.py.
 """
 
-import json
-import re
-
-from app.core.rag.generate import _get_model
+from app.core.rag.generate import _get_model, extract_json, STRUCTURED_MODEL
 from app.core.rag.repository_rag import retrieve_repository_knowledge
 
 CATEGORIES = [
@@ -74,18 +71,15 @@ do not invent components that aren't evidenced by the files. Produce
 between 4 and 10 nodes and their real connections. Keep labels short.
 """
 
-    model = _get_model()
+    model = _get_model(STRUCTURED_MODEL)
     response = model.generate_content(prompt)
 
-    text = response.text.strip()
-    text = re.sub(r"^```json\s*|\s*```$", "", text)
+    result = extract_json(response.text)
 
-    try:
-        result = json.loads(text)
-    except json.JSONDecodeError:
+    if not isinstance(result, dict) or "nodes" not in result:
         return {"nodes": [], "edges": []}
 
-    if "nodes" not in result or "edges" not in result:
-        return {"nodes": [], "edges": []}
-
+    # Tolerate a response that has nodes but omitted edges rather than
+    # throwing the whole (usable) graph away.
+    result.setdefault("edges", [])
     return result

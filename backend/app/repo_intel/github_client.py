@@ -9,7 +9,7 @@ Works unauthenticated (60 requests/hour) or with a token
 """
 
 from github import Github, Auth
-from github.GithubException import GithubException, RateLimitExceededException
+from github.GithubException import GithubException
 
 
 class GitHubClient:

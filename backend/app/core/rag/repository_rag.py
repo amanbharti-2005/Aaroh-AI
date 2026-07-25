@@ -109,6 +109,26 @@ def _load_repo_files(repo_path: str) -> list[dict]:
     return files
 
 
+def _reset_repo_index(repo_id: str) -> None:
+    """
+    Drops any previously-ingested state for this repo_id: the Chroma
+    collection and the parent-doc JSON. Called at the start of
+    ingest_repository() so re-uploading a project replaces its index
+    instead of stacking a duplicate copy on top of the old one.
+    """
+    store = _get_vector_store(repo_id)
+    try:
+        store.delete_collection()
+    except Exception:
+        # Nothing to delete on a first-time ingest — not an error.
+        pass
+    _vector_stores.pop(repo_id, None)
+
+    path = _parent_docs_path(repo_id)
+    if os.path.exists(path):
+        os.remove(path)
+
+
 def _get_vector_store(repo_id: str) -> Chroma:
     if repo_id not in _vector_stores:
         _vector_stores[repo_id] = Chroma(
@@ -131,8 +151,16 @@ def ingest_repository(repo_path: str, repo_id: str):
         return
 
     child_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
+
+    # Re-ingesting the same project used to ADD a second copy of every file:
+    # parent_docs was loaded and extended, and add_texts() appended fresh
+    # chunks under brand-new parent_ids. After two uploads, retrieval returned
+    # the same file twice and top_k was effectively halved. Reset this repo's
+    # index first so an upload always replaces rather than accumulates.
+    _reset_repo_index(repo_id)
+
     vector_store = _get_vector_store(repo_id)
-    parent_docs = _load_parent_docs(repo_id)
+    parent_docs = {}
 
     texts, metadatas = [], []
     for file in files:

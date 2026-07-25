@@ -112,8 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(backendUser);
       return { error: null };
-    } catch (error: any) {
-      return { error: error.message || 'Login failed. Please try again.' };
+    } catch (error: unknown) {
+      return {
+        error: error instanceof Error ? error.message : 'Login failed. Please try again.',
+      };
     }
   };
 
@@ -142,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(backendUser);
 
       return { error: null };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Roll back the Firebase account if the backend record was never created,
       // so we never end up with an auth account that has no matching DB row.
       if (userCredential) {
@@ -154,7 +156,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await signOut(auth).catch(() => {});
         }
       }
-      return { error: error.message || 'Signup failed. Please try again.' };
+      return {
+        error: error instanceof Error ? error.message : 'Signup failed. Please try again.',
+      };
     }
   };
 

@@ -28,12 +28,15 @@ def analyze_project(
         input_type=project.input_type,
     )
 
-    for m in result.get("milestones") or []:
+    for i, m in enumerate(result.get("milestones") or [], start=1):
         db.add(Roadmap(
             project_id=project.id,
             milestone_title=m["title"],
             milestone_description=m.get("description"),
-            order_index=m["order_index"],
+            # run_project_analysis() emits "order" (see core/agents/graph.py);
+            # this used to read m["order_index"] and raised KeyError on every
+            # call. Fall back to positional order if the LLM omits the key.
+            order_index=m.get("order", i),
         ))
 
     commentary = (

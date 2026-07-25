@@ -29,6 +29,7 @@ const colorMap: Record<string, { bg: string; border: string; text: string }> = {
   orange: { bg: '#fff7ed', border: '#f97316', text: '#c2410c' },
   purple: { bg: '#faf5ff', border: '#a855f7', text: '#7e22ce' },
   red: { bg: '#fef2f2', border: '#ef4444', text: '#b91c1c' },
+  indigo: { bg: '#eef2ff', border: '#6366f1', text: '#4338ca' },
   gray: { bg: '#f8fafc', border: '#94a3b8', text: '#475569' },
 };
 
@@ -39,10 +40,98 @@ const darkColorMap: Record<string, { bg: string; border: string; text: string }>
   orange: { bg: '#431407', border: '#f97316', text: '#fdba74' },
   purple: { bg: '#3b0764', border: '#a855f7', text: '#d8b4fe' },
   red: { bg: '#450a0a', border: '#ef4444', text: '#fca5a5' },
+  indigo: { bg: '#1e1b4b', border: '#6366f1', text: '#a5b4fc' },
   gray: { bg: '#1e293b', border: '#64748b', text: '#94a3b8' },
 };
 
-function CustomNode({ data }: { data: { label: string; sublabel: string; color: string } }) {
+// The categories the Architecture Agent emits (see backend
+// app/core/agents/architecture_agent.py CATEGORIES), in rough data-flow
+// order — used both for colour and for the left-to-right column layout.
+const CATEGORY_COLORS: Record<string, string> = {
+  'Frontend': 'blue',
+  'Auth': 'orange',
+  'API Layer': 'teal',
+  'AI/ML': 'green',
+  'Data Pipeline': 'purple',
+  'Cache': 'red',
+  'Database': 'indigo',
+  'External': 'gray',
+};
+
+const CATEGORY_ORDER = Object.keys(CATEGORY_COLORS);
+
+// Raw shape returned by GET /api/architecture/{id}
+interface RawNode { id: string; label?: string; category?: string; detail?: string }
+interface RawEdge { source: string; target: string; label?: string }
+
+// What CustomNode renders. React Flow's useNodesState<T> generic is the NODE
+// DATA type, not the node type — it was previously passed `Node[]`, which
+// typed every node's `data` as an array of nodes.
+interface FlowNodeData {
+  label: string;
+  sublabel: string;
+  color: string;
+  category: string;
+}
+
+const COLUMN_WIDTH = 260;
+const ROW_HEIGHT = 120;
+
+/**
+ * Converts the backend's {id, label, category, detail} into the shape React
+ * Flow actually requires: {id, position: {x, y}, data: {...}}.
+ *
+ * The API response was previously passed straight to setNodes(). React Flow
+ * dereferences node.position while measuring, so every node arriving without
+ * one threw during render — and with no error boundary above it, the entire
+ * Architecture page went blank rather than showing a diagram or an error.
+ * Edges hit the same problem: React Flow needs an `id` per edge, which the
+ * backend doesn't emit.
+ *
+ * The agent returns no coordinates, so we lay nodes out ourselves: one column
+ * per category in CATEGORY_ORDER, stacked vertically within the column.
+ */
+function toFlowGraph(rawNodes: RawNode[], rawEdges: RawEdge[]): { nodes: Node<FlowNodeData>[]; edges: Edge[] } {
+  const columnCounts: Record<number, number> = {};
+
+  const nodes: Node<FlowNodeData>[] = rawNodes
+    .filter(n => n && n.id)
+    .map(n => {
+      const category = n.category && CATEGORY_COLORS[n.category] ? n.category : 'External';
+      const column = Math.max(0, CATEGORY_ORDER.indexOf(category));
+      const row = columnCounts[column] ?? 0;
+      columnCounts[column] = row + 1;
+
+      return {
+        id: String(n.id),
+        type: 'default',
+        position: { x: column * COLUMN_WIDTH, y: row * ROW_HEIGHT },
+        data: {
+          label: n.label || n.id,
+          sublabel: n.detail || category,
+          color: CATEGORY_COLORS[category],
+          category,
+        },
+      };
+    });
+
+  // Drop edges pointing at nodes the model didn't actually define, otherwise
+  // React Flow warns and draws dangling connections.
+  const known = new Set(nodes.map(n => n.id));
+  const edges: Edge[] = rawEdges
+    .filter(e => e && known.has(String(e.source)) && known.has(String(e.target)))
+    .map((e, i) => ({
+      id: `e-${e.source}-${e.target}-${i}`,
+      source: String(e.source),
+      target: String(e.target),
+      label: e.label,
+      animated: true,
+    }));
+
+  return { nodes, edges };
+}
+
+function CustomNode({ data }: { data: FlowNodeData }) {
   const { theme } = useTheme();
   const palette = theme === 'dark' ? darkColorMap : colorMap;
   const colors = palette[data.color] || palette.blue;
@@ -68,23 +157,14 @@ function CustomNode({ data }: { data: { label: string; sublabel: string; color: 
 
 const nodeTypes = { default: CustomNode, input: CustomNode, output: CustomNode };
 
-const techStackLegend = [
-  { color: 'blue', label: 'Frontend' },
-  { color: 'teal', label: 'API Layer' },
-  { color: 'green', label: 'AI/ML' },
-  { color: 'purple', label: 'Data Pipeline' },
-  { color: 'orange', label: 'Auth' },
-  { color: 'red', label: 'Cache' },
-  { color: 'gray', label: 'External' },
-];
 
 export default function ArchitecturePage() {
   const { theme } = useTheme();
   const { getIdToken } = useAuth();
   const { selectedProject, loading: projectsLoading } = useSelectedProject();
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node[]>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNodeData>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [selectedNode, setSelectedNode] = useState<Node<FlowNodeData> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notIngested, setNotIngested] = useState(false);
@@ -123,8 +203,9 @@ export default function ArchitecturePage() {
         if (!res.ok) throw new Error('Failed to load architecture');
 
         const data = await res.json();
-        setNodes(data.nodes || []);
-        setEdges(data.edges || []);
+        const graph = toFlowGraph(data.nodes || [], data.edges || []);
+        setNodes(graph.nodes);
+        setEdges(graph.edges);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load architecture.');
         setNodes([]);
@@ -217,16 +298,20 @@ export default function ArchitecturePage() {
           <>
             {/* Legend */}
             <div className="card p-4 flex flex-wrap gap-3">
-              {techStackLegend.map(({ color, label }) => {
-                const palette = theme === 'dark' ? darkColorMap : colorMap;
-                const c = palette[color];
-                return (
-                  <div key={label} className="flex items-center gap-1.5 text-xs">
-                    <div className="w-3 h-3 rounded" style={{ background: c.border }} />
-                    <span className="text-surface-600 dark:text-surface-400">{label}</span>
-                  </div>
-                );
-              })}
+              {/* Only the categories actually present in this diagram. The old
+                  static list always showed all seven and omitted Database. */}
+              {CATEGORY_ORDER
+                .filter(category => nodes.some(n => n.data?.category === category))
+                .map(category => {
+                  const palette = theme === 'dark' ? darkColorMap : colorMap;
+                  const c = palette[CATEGORY_COLORS[category]];
+                  return (
+                    <div key={category} className="flex items-center gap-1.5 text-xs">
+                      <div className="w-3 h-3 rounded" style={{ background: c.border }} />
+                      <span className="text-surface-600 dark:text-surface-400">{category}</span>
+                    </div>
+                  );
+                })}
             </div>
 
             {/* React Flow canvas */}

@@ -41,7 +41,7 @@ export default function ProfilePage() {
         const data = await res.json();
         setProfile(data);
         setSelectedSkills(data.skills ? JSON.parse(data.skills) : []);
-      } catch (err) {
+      } catch {
         setError('Could not load profile');
       } finally {
         setLoading(false);
@@ -76,7 +76,7 @@ export default function ProfilePage() {
       setEditing(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
+    } catch {
       setError('Could not save profile');
     } finally {
       setSaving(false);

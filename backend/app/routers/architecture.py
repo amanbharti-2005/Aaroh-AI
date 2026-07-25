@@ -35,8 +35,10 @@ def get_architecture(
             detail="No repository has been ingested for this project yet.",
         )
 
-    # repo_id here refers to whatever unique identifier ingest_repository()
-    # was called with for this project — adjust the attribute name below
-    # (e.g. repo.repo_id or repo.id) to match your actual Repo model field.
-    graph = generate_architecture_graph(str(repo.id))
+    # repo_ingest.py calls ingest_repository(local_path, project_id), so the
+    # Repository RAG index for this project is keyed by the PROJECT id — not
+    # the Repo table's primary key. Passing str(repo.id) here looked up a
+    # collection that never exists, so this endpoint always returned an empty
+    # graph. mentor.py already keys off str(project_id) the same way.
+    graph = generate_architecture_graph(str(project_id))
     return graph

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
   Activity, TrendingUp, AlertTriangle, CheckCircle,
-  ChevronDown, ChevronUp, Shield, FileText, Code2, Server, Zap, Rocket
+  Shield, FileText, Code2, Server, Zap, Rocket
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AppLayout from '../../layouts/AppLayout';
 import { useAuth } from '../../context/AuthContext';
@@ -35,14 +36,14 @@ interface Category {
   issues: string[];
 }
 
-const statusConfig: Record<Status, { color: string; bg: string; label: string; icon: React.FC<any> }> = {
+const statusConfig: Record<Status, { color: string; bg: string; label: string; icon: LucideIcon }> = {
   excellent: { color: 'text-accent-600 dark:text-accent-400', bg: 'bg-accent-50 dark:bg-accent-950', label: 'Excellent', icon: CheckCircle },
   good: { color: 'text-primary-600 dark:text-primary-400', bg: 'bg-primary-50 dark:bg-primary-950', label: 'Good', icon: TrendingUp },
   warning: { color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950', label: 'Needs attention', icon: AlertTriangle },
   critical: { color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950', label: 'Critical', icon: AlertTriangle },
 };
 
-const categoryIcons: Record<string, React.FC<any>> = {
+const categoryIcons: Record<string, LucideIcon> = {
   Architecture: Server,
   Scalability: TrendingUp,
   Documentation: FileText,
@@ -94,18 +95,13 @@ function ScoreBar({ score, color }: { score: number; color: string }) {
 }
 
 function CategoryCard({ cat }: { cat: Category }) {
-  const [expanded, setExpanded] = useState(false);
   const config = statusConfig[cat.status];
   const Icon = categoryIcons[cat.name] || Activity;
   const barColor = cat.score >= 85 ? 'bg-accent-500' : cat.score >= 70 ? 'bg-primary-500' : cat.score >= 55 ? 'bg-amber-500' : 'bg-red-500';
 
   return (
     <div className="card overflow-hidden">
-      <button
-        className="w-full p-5 flex items-center gap-4 hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors"
-        onClick={() => setExpanded(e => !e)}
-        aria-expanded={expanded}
-      >
+      <div className="w-full p-5 flex items-center gap-4">
         <div className={`w-10 h-10 rounded-lg ${config.bg} flex items-center justify-center flex-shrink-0`}>
           <Icon size={18} className={config.color} />
         </div>
@@ -119,29 +115,7 @@ function CategoryCard({ cat }: { cat: Category }) {
           </div>
           <ScoreBar score={cat.score} color={barColor} />
         </div>
-        <div className="flex-shrink-0 text-surface-400">
-          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </div>
-      </button>
-
-      {expanded && (
-        <div className="px-5 pb-5 border-t border-surface-100 dark:border-surface-700 pt-4 animate-fade-in">
-          {cat.summary && <p className="text-sm text-surface-700 dark:text-surface-300 mb-3">{cat.summary}</p>}
-          {cat.issues.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-surface-500 dark:text-surface-400 uppercase tracking-wide mb-2">Issues to address:</p>
-              <ul className="space-y-1.5">
-                {cat.issues.map((issue, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-surface-600 dark:text-surface-400">
-                    <AlertTriangle size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                    {issue}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -177,6 +151,32 @@ export default function HealthPage() {
   const [report, setReport] = useState<BackendReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    if (!selectedProject) return;
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(ENDPOINTS.health.generate(String(selectedProject.id)), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || 'Could not generate the health report.');
+      }
+      const fresh: BackendReport = await res.json();
+      setReport(fresh);
+      setError(null);
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Could not generate the health report.');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedProject) {
@@ -247,8 +247,24 @@ export default function HealthPage() {
             <h1 className="page-title">Project Health</h1>
             <ProjectSwitcher />
           </div>
-          <div className="card p-8 text-center text-muted">
-            No health report has been generated for {selectedProject.title} yet.
+          <div className="card p-8 text-center space-y-4">
+            <p className="text-muted">
+              No health report has been generated for {selectedProject.title} yet.
+            </p>
+            <p className="text-sm text-muted">
+              Aaroh will analyse the ingested code and score it across seven categories.
+            </p>
+            {generateError && (
+              <p className="text-sm text-red-500">{generateError}</p>
+            )}
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
+            >
+              <Activity size={15} className={generating ? 'animate-spin' : ''} />
+              {generating ? 'Analysing your code…' : 'Generate health report'}
+            </button>
           </div>
         </div>
       </AppLayout>
@@ -271,11 +287,23 @@ export default function HealthPage() {
           </div>
           <div className="flex items-center gap-3">
             <ProjectSwitcher />
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50"
+            >
+              <Activity size={15} className={generating ? 'animate-spin' : ''} />
+              {generating ? 'Analysing…' : 'Re-analyze'}
+            </button>
             <Link to="/report" className="btn-secondary flex items-center gap-2 text-sm">
               <FileText size={15} />Export Report
             </Link>
           </div>
         </div>
+
+        {generateError && (
+          <div className="card p-3 text-sm text-red-500">{generateError}</div>
+        )}
 
         <div className="card p-6">
           <div className="flex flex-col md:flex-row items-center gap-8">

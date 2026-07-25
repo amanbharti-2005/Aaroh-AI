@@ -10,10 +10,7 @@ to return STRUCTURED scores (not prose) so they can go straight into
 the Report table's numeric columns.
 """
 
-import json
-import re
-
-from app.core.rag.generate import _get_model
+from app.core.rag.generate import _get_model, extract_json, STRUCTURED_MODEL
 from app.core.rag.repository_rag import retrieve_repository_knowledge
 
 # NOTE: your Report model currently has 4 score fields (architecture,
@@ -79,21 +76,20 @@ Code to evaluate:
 {context}
 """
 
-    model = _get_model()
+    model = _get_model(STRUCTURED_MODEL)
     response = model.generate_content(prompt)
 
-    # Gemini sometimes wraps JSON in ```json fences despite instructions — strip them.
-    text = response.text.strip()
-    text = re.sub(r"^```json\s*|\s*```$", "", text)
+    # The model sometimes wraps JSON in fences despite instructions —
+    # extract_json() handles those plus prose-wrapped JSON.
+    result = extract_json(response.text)
+    if isinstance(result, dict):
+        return result
 
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # Fallback so a bad parse doesn't crash the request — return
-        # neutral scores and flag it in the commentary instead.
-        return {
-            "architecture_score": 50, "scalability_score": 50,
-            "documentation_score": 50, "deployment_readiness_score": 50,
-            "code_quality_score": 50, "security_score": 50, "performance_score": 50,
-            "ai_commentary": "Could not generate a reliable report — try re-analyzing.",
-        }
+    # Fallback so a bad parse doesn't crash the request — return
+    # neutral scores and flag it in the commentary instead.
+    return {
+        "architecture_score": 50, "scalability_score": 50,
+        "documentation_score": 50, "deployment_readiness_score": 50,
+        "code_quality_score": 50, "security_score": 50, "performance_score": 50,
+        "ai_commentary": "Could not generate a reliable report — try re-analyzing.",
+    }

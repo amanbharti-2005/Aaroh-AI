@@ -13,4 +13,9 @@ class Repo(Base):
     detected_frameworks = Column(Text, nullable=True)      # e.g. "FastAPI,React"
     dependencies = Column(Text, nullable=True)              # raw list, JSON string for now
     architecture_pattern = Column(String, nullable=True)    # e.g. "MVC", "microservices"
+    # Full Repository Intelligence result (project_type, platforms, tech_stack,
+    # code_quality, readme, project_summary) as a JSON string. Written by
+    # routers/repo_ingest.py on ingest, read by routers/analytics.py and the
+    # repo-intel endpoint.
+    full_analysis = Column(Text, nullable=True)
     analyzed_at = Column(DateTime(timezone=True), server_default=func.now())

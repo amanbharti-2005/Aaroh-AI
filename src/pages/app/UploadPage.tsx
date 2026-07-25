@@ -65,6 +65,7 @@ export default function UploadPage() {
   const [uploadState, setUploadState] = useState<UploadState>('idle');
   const [error, setError] = useState('');
   const [roadmapWarning, setRoadmapWarning] = useState('');
+  const [healthWarning, setHealthWarning] = useState('');
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const finalTranscriptRef = useRef('');
@@ -122,6 +123,7 @@ export default function UploadPage() {
     e.preventDefault();
     setError('');
     setRoadmapWarning('');
+    setHealthWarning('');
 
     if (!title.trim()) { setError('Please give your project a title.'); return; }
     if ((mode === 'text' || mode === 'voice') && !text.trim()) {
@@ -222,6 +224,22 @@ export default function UploadPage() {
         } catch {
           setRoadmapWarning('Project analyzed successfully, but the roadmap couldn\'t be generated. You can try again from the Roadmap page.');
         }
+
+        // Health report — nothing used to generate one, so Project Health
+        // stayed empty forever after an upload. Best-effort like the roadmap:
+        // a failure here shouldn't undo a successful ingest, and the Health
+        // page has its own "Generate health report" button to retry.
+        try {
+          const healthRes = await fetch(ENDPOINTS.health.generate(String(projectId)), {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!healthRes.ok) {
+            setHealthWarning('Project analyzed successfully, but the health report couldn\'t be generated. You can generate it from the Project Health page.');
+          }
+        } catch {
+          setHealthWarning('Project analyzed successfully, but the health report couldn\'t be generated. You can generate it from the Project Health page.');
+        }
       }
 
       // Step 4: make it the active project everywhere
@@ -245,6 +263,7 @@ export default function UploadPage() {
     setUploadState('idle');
     setTitle(''); setZipFile(null); setText(''); setGithubUrl('');
     setRoadmapWarning('');
+    setHealthWarning('');
     finalTranscriptRef.current = '';
   };
 
@@ -265,12 +284,12 @@ export default function UploadPage() {
             <p className="text-muted mb-6">
               Your project is now active across all dashboard pages.
             </p>
-            {roadmapWarning && (
-              <div className="flex items-start gap-2 text-left p-3 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm mb-6 max-w-md mx-auto">
+            {[roadmapWarning, healthWarning].filter(Boolean).map(warning => (
+              <div key={warning} className="flex items-start gap-2 text-left p-3 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm mb-3 max-w-md mx-auto">
                 <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                {roadmapWarning}
+                {warning}
               </div>
-            )}
+            ))}
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button onClick={() => navigate('/dashboard')} className="btn-primary">
                 Go to Dashboard

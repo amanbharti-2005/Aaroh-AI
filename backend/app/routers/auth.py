@@ -5,7 +5,7 @@ from firebase_admin import auth as firebase_auth
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.schemas.auth import SignupRequest
+from app.schemas.auth import SignupRequest, ProfileUpdateRequest
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -76,6 +76,36 @@ def read_current_user(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    return _user_payload(db_user)
+
+
+@router.put("/me")
+def update_current_user(
+    request: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Updates the signed-in user's profile. The frontend's Profile page has
+    always PUT to this path on save, but only GET /auth/me existed — so
+    every save came back 405 and silently showed "Could not save profile".
+    """
+    db_user = db.query(User).filter(User.firebase_uid == current_user["uid"]).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # exclude_unset so an omitted field keeps its current value instead of
+    # being nulled out by a partial update.
+    for field, value in request.dict(exclude_unset=True).items():
+        setattr(db_user, field, value)
+
+    db.commit()
+    db.refresh(db_user)
+
+    return _user_payload(db_user)
+
+
+def _user_payload(db_user: User) -> dict:
     return {
         "id": db_user.id,
         "email": db_user.email,

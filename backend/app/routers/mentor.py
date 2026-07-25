@@ -62,6 +62,20 @@ def ask(
         )
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        # Anything from the Groq client (rate limits, 413 too-large, upstream
+        # outages) used to escape as a bare 500 with no body, which the chat
+        # UI could only render as "Failed to fetch". Translate it into a
+        # readable message so the user knows whether to wait or change input.
+        detail = str(e)
+        if "rate_limit" in detail or "429" in detail or "413" in detail:
+            detail = (
+                "The AI service is rate-limited right now (Groq free tier allows "
+                "12,000 tokens/minute). Wait about a minute and try again."
+            )
+        else:
+            detail = f"The AI service failed to answer: {detail}"
+        raise HTTPException(status_code=503, detail=detail)
  
     # ask_hybrid() returns engineering_sources/repo_sources separately
     # (so the frontend could distinguish them later if useful), but

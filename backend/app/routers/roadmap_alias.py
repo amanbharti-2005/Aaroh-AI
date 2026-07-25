@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -20,21 +20,3 @@ def get_roadmap(
         .order_by(Roadmap.order_index)
         .all()
     )
-
-
-@router.put("/{project_id}/milestones/{milestone_id}", response_model=RoadmapResponse)
-def update_milestone(
-    project_id: int,
-    milestone_id: int,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    milestone = (
-        db.query(Roadmap)
-        .filter(Roadmap.id == milestone_id, Roadmap.project_id == project_id)
-        .first()
-    )
-    if not milestone:
-        raise HTTPException(status_code=404, detail="Milestone not found")
-
-    return milestone

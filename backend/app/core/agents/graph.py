@@ -12,10 +12,7 @@ planner.py (in this same folder) is a separate, simpler router for
 chat questions.
 """
 
-import json
-import re
-
-from app.core.rag.generate import _get_model
+from app.core.rag.generate import _get_model, extract_json, STRUCTURED_MODEL
 from app.core.rag.engineering_rag import retrieve_engineering_knowledge
 
 
@@ -85,15 +82,12 @@ Generate 3-5 suggested_features and 4-6 milestones, ordered from
 setup to deployment.
 """
 
-    model = _get_model()
+    model = _get_model(STRUCTURED_MODEL)
     response = model.generate_content(prompt)
 
-    text = response.text.strip()
-    text = re.sub(r"^```json\s*|\s*```$", "", text)
+    result = extract_json(response.text)
 
-    try:
-        result = json.loads(text)
-    except json.JSONDecodeError:
+    if not isinstance(result, dict):
         result = {
             "domain": "General Software Project",
             "complexity": "Intermediate",
