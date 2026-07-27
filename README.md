@@ -46,7 +46,7 @@ From there, Aaroh AI analyzes your repository, identifies technologies and archi
 - **Innovation suggestions** and feature enhancement recommendations
 - **AI-generated development roadmap** with milestones
 - **GitHub quality review** and deployment-readiness assessment
-- **AI Project Health Dashboard** — architecture, scalability, and documentation scores
+- **AI Project Health Dashboard** — architecture, scalability, and documentation scores.
 - **Interactive AI mentor** for continuous, ongoing guidance
 - **Secure authentication and project storage** using Firebase
 - **Analytics dashboard** with React Flow and Recharts
