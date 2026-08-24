@@ -75,7 +75,6 @@ langchain-huggingface==0.3.1
 langgraph
 chromadb==0.5.23
 sentence-transformers==5.1.0
-faiss-cpu==1.12.0
 tavily-python==0.7.11
 groq
 # app/repo_intel/llm_summary.py talks to Groq through its OpenAI-compatible
@@ -91,7 +90,6 @@ PyGithub
 
 # --- Document / text processing ---
 pypdf==6.0.0
-unstructured==0.18.14
 markdown==3.9
 beautifulsoup4==4.13.5
 lxml==6.0.1

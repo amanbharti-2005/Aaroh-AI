@@ -9,11 +9,9 @@ Two entry points:
 - retrieve_engineering_knowledge() -> called by the router (and eventually the
                                        Planner Agent) to fetch relevant chunks
 """
+from __future__ import annotations
 
 import os
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
 
 from app.core.rag.embeddings import get_embeddings
 
@@ -30,6 +28,10 @@ def ingest_knowledge_base():
     Run this manually whenever you add/change docs:
         python -m app.core.rag.engineering_rag
     """
+    from langchain_community.document_loaders import DirectoryLoader, TextLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_community.vectorstores import Chroma
+
     loader = DirectoryLoader(
         KNOWLEDGE_BASE_DIR,
         glob="**/*.md",
@@ -56,6 +58,8 @@ def ingest_knowledge_base():
 def _get_vector_store():
     global _vector_store
     if _vector_store is None:
+        from langchain_community.vectorstores import Chroma
+
         _vector_store = Chroma(
             collection_name=COLLECTION_NAME,
             embedding_function=get_embeddings(),

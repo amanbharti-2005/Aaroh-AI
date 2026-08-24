@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 
 import firebase_admin
 from firebase_admin import credentials, auth
 
 from app.core.config import settings
+
+logger = logging.getLogger("aaroh.firebase")
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 # backend/firebase-credentials.json — resolved relative to this file so it
@@ -27,9 +30,24 @@ def _load_credentials():
     won't boot".
     """
     if settings.firebase_credentials_json:
-        return credentials.Certificate(json.loads(settings.firebase_credentials_json))
+        try:
+            return credentials.Certificate(json.loads(settings.firebase_credentials_json))
+        except Exception:
+            logger.exception(
+                "Failed to load FIREBASE_CREDENTIALS_JSON (malformed JSON, or a "
+                "mangled private_key from being pasted into a single-line env "
+                "var box) — falling back to auth disabled."
+            )
+            return None
     if os.path.exists(_CREDENTIALS_FILE):
-        return credentials.Certificate(_CREDENTIALS_FILE)
+        try:
+            return credentials.Certificate(_CREDENTIALS_FILE)
+        except Exception:
+            logger.exception(
+                "Failed to load firebase-credentials.json — falling back to "
+                "auth disabled."
+            )
+            return None
     return None
 
 
