@@ -1,4 +1,3 @@
-from langchain_huggingface import HuggingFaceEmbeddings
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 _embeddings = None
@@ -7,5 +6,6 @@ _embeddings = None
 def get_embeddings():
     global _embeddings
     if _embeddings is None:
+        from langchain_huggingface import HuggingFaceEmbeddings
         _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
     return _embeddings

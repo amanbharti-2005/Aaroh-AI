@@ -22,16 +22,18 @@ Two entry points:
 - retrieve_repository_knowledge(query, repo_id, top_k) -> called by the
   router / Planner Agent to fetch relevant code + its file context
 """
+from __future__ import annotations
 
 import os
 import json
 import uuid
 from pathlib import Path
-
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from typing import TYPE_CHECKING
 
 from app.core.rag.embeddings import get_embeddings
+
+if TYPE_CHECKING:
+    from langchain_community.vectorstores import Chroma
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 CHROMA_BASE_DIR = os.path.join(_THIS_DIR, "chroma_db", "repository")
@@ -131,6 +133,8 @@ def _reset_repo_index(repo_id: str) -> None:
 
 def _get_vector_store(repo_id: str) -> Chroma:
     if repo_id not in _vector_stores:
+        from langchain_community.vectorstores import Chroma
+
         _vector_stores[repo_id] = Chroma(
             collection_name=f"repo_{repo_id}",
             embedding_function=get_embeddings(),
@@ -145,6 +149,8 @@ def ingest_repository(repo_path: str, repo_id: str):
     a repo (repo_path = local folder the repo was extracted/cloned to,
     repo_id = a unique id for this project, e.g. your DB's project id).
     """
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
     files = _load_repo_files(repo_path)
     if not files:
         print(f"No code files found in {repo_path}")

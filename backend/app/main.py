@@ -1,4 +1,7 @@
+import logging
 import os
+import re
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,7 +31,19 @@ from app.routers import (
     report_generate,
 )
 
-app = FastAPI(title="Aaroh AI Backend")
+logger = logging.getLogger("aaroh.startup")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        logger.exception("Failed to initialize database schema at startup")
+    yield
+
+
+app = FastAPI(title="Aaroh AI Backend", lifespan=lifespan)
 
 # Origins allowed to call this API from a browser. Local dev ports are always
 # allowed; the deployed frontend's URL is added via the FRONTEND_ORIGINS env
@@ -43,18 +58,48 @@ _default_origins = [
     "http://127.0.0.1:5174",
 ]
 _extra_origins = [
-    o.strip() for o in os.environ.get("FRONTEND_ORIGINS", "").split(",") if o.strip()
+    o.strip().rstrip("/")
+    for o in os.environ.get("FRONTEND_ORIGINS", "").split(",")
+    if o.strip()
 ]
+
+
+def _vercel_preview_regex(origins: list[str]) -> str | None:
+    """
+    Vercel gives every preview deployment of a project its own URL
+    (project-slug-<hash>-<team>.vercel.app), distinct from the stable
+    production URL in FRONTEND_ORIGINS. Auto-allow those too, derived from
+    the production origin's slug, so preview deploys aren't CORS-blocked.
+    """
+    for origin in origins:
+        if ".vercel.app" not in origin:
+            continue
+        host = origin.split("://", 1)[-1]
+        slug = host.split(".vercel.app")[0]
+        if not slug:
+            continue
+        escaped = re.escape(slug)
+        return rf"^https://({escaped}|{escaped}-[a-z0-9-]+)\.vercel\.app$"
+    return None
+
+
+_frontend_origin_regex = os.environ.get("FRONTEND_ORIGIN_REGEX") or _vercel_preview_regex(
+    _extra_origins
+)
+
+print(
+    f"[CORS] exact origins: {_default_origins + _extra_origins} | "
+    f"regex: {_frontend_origin_regex}"
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_default_origins + _extra_origins,
+    allow_origin_regex=_frontend_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-Base.metadata.create_all(bind=engine)
 
 app.include_router(project_router.router)
 app.include_router(auth_router.router)
