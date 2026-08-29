@@ -19,8 +19,8 @@ GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 # Free-tier candidates on Groq, tried in order in case one gets retired.
 # Check https://console.groq.com/docs/models for the current lineup.
 CANDIDATE_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-20b",
     "gpt-oss-120b",
 ]
 
