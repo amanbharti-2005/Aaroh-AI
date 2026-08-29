@@ -20,8 +20,8 @@ from app.core.rag.web_rag import search_web
 # analysis) get the 8b — they're where nearly all the token volume goes, and
 # they don't benefit much from the bigger model. Separate buckets mean the
 # two features can't starve each other.
-CHAT_MODEL = "llama-3.3-70b-versatile"
-STRUCTURED_MODEL = "llama-3.1-8b-instant"
+CHAT_MODEL = "openai/gpt-oss-120b"
+STRUCTURED_MODEL = "openai/gpt-oss-20b"
 
 MODEL_NAME = CHAT_MODEL  # default for callers that don't specify one
 
