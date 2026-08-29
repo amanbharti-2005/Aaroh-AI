@@ -74,6 +74,10 @@ langchain-google-genai
 langgraph
 chromadb==0.5.23
 tavily-python==0.7.11
+# Already installed transitively (chromadb, langchain-core all depend on
+# it); pinned explicitly because app/core/rag/embedding_retry.py now
+# imports it directly for Gemini embed rate-limit retry/backoff.
+tenacity==9.1.4
 groq
 # app/repo_intel/llm_summary.py talks to Groq through its OpenAI-compatible
 # endpoint using the standard OpenAI client, so this package is required even

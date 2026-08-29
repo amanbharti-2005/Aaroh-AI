@@ -151,6 +151,8 @@ def ingest_repository(repo_path: str, repo_id: str):
     """
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+    from app.core.rag.embedding_retry import EMBED_BATCH_SIZE, retry_embedding_call
+
     files = _load_repo_files(repo_path)
     if not files:
         print(f"No code files found in {repo_path}")
@@ -178,7 +180,19 @@ def ingest_repository(repo_path: str, repo_id: str):
             texts.append(chunk)
             metadatas.append({"parent_id": parent_id, "source": file["source"]})
 
-    vector_store.add_texts(texts=texts, metadatas=metadatas)
+    @retry_embedding_call
+    def _add_texts_batch(batch_texts, batch_metadatas):
+        vector_store.add_texts(texts=batch_texts, metadatas=batch_metadatas)
+
+    # Submitted in Gemini-batch-sized groups, each independently retried, so
+    # a 429 on one group doesn't throw away embeddings already persisted for
+    # earlier groups (see embedding_retry.py for why).
+    for start in range(0, len(texts), EMBED_BATCH_SIZE):
+        _add_texts_batch(
+            texts[start : start + EMBED_BATCH_SIZE],
+            metadatas[start : start + EMBED_BATCH_SIZE],
+        )
+
     _save_parent_docs(repo_id, parent_docs)
 
     print(f"Ingested {len(files)} files for repo_id='{repo_id}'")
