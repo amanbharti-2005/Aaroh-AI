@@ -32,6 +32,8 @@ def ingest_knowledge_base():
     from langchain_text_splitters import RecursiveCharacterTextSplitter
     from langchain_community.vectorstores import Chroma
 
+    from app.core.rag.embedding_retry import EMBED_BATCH_SIZE, retry_embedding_call
+
     loader = DirectoryLoader(
         KNOWLEDGE_BASE_DIR,
         glob="**/*.md",
@@ -46,12 +48,22 @@ def ingest_knowledge_base():
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
     chunks = splitter.split_documents(docs)
 
-    Chroma.from_documents(
-        documents=chunks,
-        embedding=get_embeddings(),
+    store = Chroma(
         collection_name=COLLECTION_NAME,
+        embedding_function=get_embeddings(),
         persist_directory=CHROMA_DB_DIR,
     )
+
+    @retry_embedding_call
+    def _add_documents_batch(batch):
+        store.add_documents(batch)
+
+    # Submitted in Gemini-batch-sized groups, each independently retried, so
+    # a 429 on one group doesn't throw away embeddings already persisted for
+    # earlier groups (see embedding_retry.py for why).
+    for start in range(0, len(chunks), EMBED_BATCH_SIZE):
+        _add_documents_batch(chunks[start : start + EMBED_BATCH_SIZE])
+
     print(f"Ingested {len(docs)} docs / {len(chunks)} chunks into {CHROMA_DB_DIR}")
 
 
